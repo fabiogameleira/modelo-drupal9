@@ -1,0 +1,4 @@
+services:
+  a11y_form_helpers.autocomplete_attribute:
+    class: Drupal\a11y_form_helpers\AutocompleteAttributeManager
+    parent: default_plugin_manager

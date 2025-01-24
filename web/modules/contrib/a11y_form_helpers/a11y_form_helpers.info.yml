@@ -1,0 +1,13 @@
+name: 'A11Y: Form Helpers'
+description: Make forms more accessible.
+package: Accessibility
+core_version_requirement: ^8.8 || ^9
+type: module
+
+dependencies:
+  - drupal:inline_form_errors
+
+# Information added by Drupal.org packaging script on 2022-05-05
+version: '8.x-1.0'
+project: 'a11y_form_helpers'
+datestamp: 1651744846

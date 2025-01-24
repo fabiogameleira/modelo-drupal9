@@ -1,0 +1,12 @@
+type: module
+name: Migrate Run
+description: 'The Migrate Drush Runner.'
+package: Migration
+core_version_requirement: ^9.1
+dependencies:
+  - drupal:migrate
+
+# Information added by Drupal.org packaging script on 2020-12-08
+version: '2.1.0-beta4'
+project: 'migrate_run'
+datestamp: 1607443018

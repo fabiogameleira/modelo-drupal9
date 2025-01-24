@@ -1,0 +1,185 @@
+<?php
+
+/**
+ * @file
+ * Hooks and alters for A11Y Form Helpers.
+ */
+
+use Drupal\a11y_form_helpers\A11yFormHelpersRenderElement;
+use Drupal\Component\Plugin\Exception\PluginException;
+use Drupal\Core\Entity\Entity\EntityViewDisplay;
+use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\Core\Field\FormatterInterface;
+use Drupal\Core\Field\WidgetInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Template\Attribute;
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function a11y_form_helpers_module_implements_alter(&$implementations, $hook) {
+  switch ($hook) {
+    // Move hooks to the end of the list.
+    case 'element_info_alter':
+    case 'form_alter':
+    case 'theme_registry_alter':
+    case 'preprocess_form_element':
+      $group = $implementations['a11y_form_helpers'];
+      unset($implementations['a11y_form_helpers']);
+      $implementations['a11y_form_helpers'] = $group;
+      break;
+  }
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function a11y_form_helpers_element_info_alter(array &$definitions) {
+  \Drupal::classResolver(A11yFormHelpersRenderElement::class)
+    ->alterElementInfo($definitions);
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function a11y_form_helpers_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+
+  // Disable all HTML5 form validations and rely on Drupal messages.
+  $form['#attributes']['novalidate'] = 'novalidate';
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function a11y_form_helpers_theme_registry_alter(&$theme_registry) {
+  // Replace default theme form-element.html.twig template from core.
+  if (strpos($theme_registry['form_element']['theme path'], 'core/') === 0) {
+    $path = array_reverse(explode('/', $theme_registry['form_element']['theme path']));
+    $module_path = drupal_get_path('module', 'a11y_form_helpers');
+
+    if (file_exists($module_path . '/templates/' . $path[0])) {
+      $theme_registry['form_element']['path'] = $module_path . '/templates/' . $path[0];
+    }
+    else {
+      $theme_registry['form_element']['path'] = $module_path . '/templates/system';
+    }
+
+    $theme_registry['form_element']['theme path'] = $module_path;
+  }
+
+  // Replace default theme fieldset.html.twig template from core.
+  if (strpos($theme_registry['fieldset']['theme path'], 'core/') === 0) {
+    $path = array_reverse(explode('/', $theme_registry['fieldset']['theme path']));
+    $module_path = drupal_get_path('module', 'a11y_form_helpers');
+
+    if (file_exists($module_path . '/templates/' . $path[0])) {
+      $theme_registry['fieldset']['path'] = $module_path . '/templates/' . $path[0];
+    }
+    else {
+      $theme_registry['fieldset']['path'] = $module_path . '/templates/system';
+    }
+
+    $theme_registry['fieldset']['theme path'] = $module_path;
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for form_element.
+ */
+function a11y_form_helpers_preprocess_form_element(&$variables) {
+  $element = &$variables['element'];
+
+  // Add error data.
+  if (!empty($element['#errors']) && empty($element['#error_no_message'])) {
+    $variables['errors'] = $element['#errors'];
+    $variables['errormessage_id'] = $element['#id'] . '--errormessage';
+  }
+
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for fieldset.
+ */
+function a11y_form_helpers_preprocess_fieldset(&$variables) {
+  $element = &$variables['element'];
+
+  // Add error data.
+  if (!empty($element['#errors']) && empty($element['#error_no_message'])) {
+    $variables['errors'] = $element['#errors'];
+    $variables['errormessage_id'] = $element['#id'] . '--errormessage';
+  }
+}
+
+/**
+ * Implements hook_field_widget_third_party_settings_form().
+ */
+function a11y_form_helpers_field_widget_third_party_settings_form(WidgetInterface $plugin, FieldDefinitionInterface $field_definition, $form_mode, array $form, FormStateInterface $form_state) {
+  /** @var \Drupal\a11y_form_helpers\AutocompleteAttributeManagerInterface $autocompleteAttrManager */
+  $autocompleteAttrManager = \Drupal::service('a11y_form_helpers.autocomplete_attribute');
+
+  try {
+
+    $purposes = $autocompleteAttrManager->getPurposes($field_definition->getType());
+    if (!$purposes) {
+      return;
+    }
+
+    $element['purpose'] = [
+      '#type' => 'select',
+      '#title' => t('Purpose'),
+      '#options' => $purposes,
+      '#empty_value' => '',
+      '#required' => FALSE,
+      '#default_value' => $plugin->getThirdPartySetting('a11y_form_helpers', 'purpose'),
+    ];
+
+    return $element;
+  }
+  catch (PluginException $exception) {
+    watchdog_exception('a11y_form_helpers', $exception);
+  }
+}
+
+/**
+ * Implements hook_field_widget_settings_summary_alter().
+ */
+function a11y_form_helpers_field_widget_settings_summary_alter(array &$summary, array $context) {
+  $purpose = $context['widget']->getThirdPartySetting('a11y_form_helpers', 'purpose');
+
+  if (!empty($purpose)) {
+    /** @var \Drupal\a11y_form_helpers\AutocompleteAttributeManager $autocomplete_attr_manager */
+    $autocomplete_attr_manager = \Drupal::service('a11y_form_helpers.autocomplete_attribute');
+
+    $summary[] = t('Purpose: @key', [
+      '@key' => $autocomplete_attr_manager->hasDefinition($purpose) ? $purpose : t('Unknown'),
+    ]);
+  }
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function a11y_form_helpers_field_widget_form_alter(&$element, FormStateInterface $form_state, $context) {
+  $plugin_id = $context['widget']->getThirdPartySetting('a11y_form_helpers', 'purpose');
+
+  if (empty($plugin_id)) {
+    return;
+  }
+
+  try {
+    /** @var \Drupal\a11y_form_helpers\AutocompleteAttributeManager $autocomplete_attr_manager */
+    $autocomplete_attr_manager = \Drupal::service('a11y_form_helpers.autocomplete_attribute');
+
+    if ($autocomplete_attr_manager->hasDefinition($plugin_id)) {
+      /** @var \Drupal\a11y_form_helpers\Plugin\AutocompleteAttributePluginBaseInterface $plugin */
+      $plugin = $autocomplete_attr_manager->createInstance($plugin_id);
+
+      $plugin->fieldWidgetFormAlter($element, $form_state, $context);
+    }
+  }
+  catch (PluginException $exception) {
+    watchdog_exception('a11y_form_helpers', $exception);
+  }
+
+  return;
+}
